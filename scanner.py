@@ -13,7 +13,7 @@ Examples:
 protocol = sys.argv[1]
 ip = sys.argv[2]
 ports = sys.argv[3]
-match = re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", ip)	# Chech to see if IP Specified
+match = re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", ip)	# Chech to see if IP Specified, Not the best and the most effective way
 if None == match:
 	try: 
 		ip = socket.gethostbyname(ip)	# Get the ip from the host name
@@ -51,6 +51,7 @@ for port in ports:
 		s.connect((ip, port))		# connect to host on specified port
 	except ConnectionRefusedError:
 		print("{}:{} Connection refused".format(ip, port)) # if exception raised, host ip not reachable
+		s.close()
 		continue
 	print("{}:{} Port Open".format(ip, port))	# Else reachable
 	s.close()
