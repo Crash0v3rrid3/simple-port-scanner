@@ -1,1 +1,1 @@
-# simple-port-scanner
+# Simple TCP and UDP Port Scanner
