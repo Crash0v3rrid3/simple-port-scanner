@@ -3,11 +3,11 @@ import sys
 import re
 
 if len(sys.argv) < 4:
-	print('''Usage: {} protocol ip port/s
+	print('''Usage: {file} protocol ip port/s
 Examples:
-{} tcp 192.168.1.11 80,100
-{} udp 1.1.1.1 53
-{} tcp www.google.com 50-100 '''.format(sys.argv[0], sys.argv[0], sys.argv[0], sys.argv[0]))	# Check if the arguments are correct
+{file} tcp 192.168.1.11 80,100
+{file} udp 1.1.1.1 53
+{file} tcp www.google.com 50-100 '''.format(file=sys.argv[0]))	# Check if the arguments are correct
 	exit(1)
 
 protocol = sys.argv[1]
