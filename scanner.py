@@ -6,119 +6,118 @@ from type_utilities import *
 
 
 class PortScanner:
-	"""Scanner class"""
+    """Scanner class"""
 
-	class ScanResult:
-		"""Scan Result class"""
+    class ScanResult:
+        """Scan Result class"""
 
-		# Result Possibilities
-		OPEN = 'open'
-		FILTERED = 'filtered'
-		CLOSED = 'closed'
+        # Result Possibilities
+        OPEN = 'open'
+        FILTERED = 'filtered'
+        CLOSED = 'closed'
 
-		def __init__(self, port, message, status):
-			self.port = port
-			self.message = message
-			self.status = status
+        def __init__(self, port, message, status):
+            self.port = port
+            self.message = message
+            self.status = status
 
-		def is_open(self):
-			return self.status == PortScanner.ScanResult.OPEN
+        def is_open(self):
+            return self.status == PortScanner.ScanResult.OPEN
 
-		def __str__(self):
-			return '%8s%10s\t%s' % (self.port, self.status, self.message)
+        def __str__(self):
+            return '%8s%10s\t%s' % (self.port, self.status, self.message)
 
-	def __init__(self, ip, port_range, protocol, service_scan=False, thread_count=1, timeout_sleep=0.5):
-		self.scan_results = []
-		self.threads = []
+    def __init__(self, ip, port_range, protocol, service_scan=False, thread_count=1, timeout_sleep=0.5):
+        self.scan_results = []
+        self.threads = []
 
-		self.thread_count = thread_count
-		self.port_range = port_range
-		self.timeout_sleep = timeout_sleep
-		self.ip = ip
-		self.protocol = protocol
-		self.service_scan = service_scan
+        self.thread_count = thread_count
+        self.port_range = port_range
+        self.timeout_sleep = timeout_sleep
+        self.ip = ip
+        self.protocol = protocol
+        self.service_scan = service_scan
 
-		self.scan_results_lock = threading.Lock()
-		self.port_range_lock = threading.Lock()
+        self.scan_results_lock = threading.Lock()
+        self.port_range_lock = threading.Lock()
 
-	def __iter__(self):
-		return self
+    def __iter__(self):
+        return self
 
-	def __next__(self):
-		if self.is_done():
-			raise StopIteration
+    def __next__(self):
+        while True:
+            while not self.scan_results:
+                if self.is_done():
+                    raise StopIteration
+                time.sleep(self.timeout_sleep)
+            with self.scan_results_lock:
+                if self.scan_results:
+                    return self.scan_results.pop(0)
 
-		while True:
-			while not self.scan_results:
-				time.sleep(self.timeout_sleep)
-			with self.scan_results_lock:
-				if self.scan_results:
-					return self.scan_results.pop(0)
+    def is_port_open(self, port):
+        s = socket.socket(socket.AF_INET, self.protocol)              # Create new socket
 
-	def is_port_open(self, port):
-		s = socket.socket(socket.AF_INET, self.protocol)  			# Create new socket
+        if self.protocol == socket.SOCK_STREAM:                        # TCP is simple
+            s.connect((self.ip, port))                              # connect to host on specified port
+            s.close()
+            return True
+        elif self.protocol == socket.SOCK_DGRAM:                    # UDP needs some extra work
+            pass
 
-		if self.protocol == socket.SOCK_STREAM:						# TCP is simple
-			s.connect((self.ip, port))  							# connect to host on specified port
-			s.close()
-			return True
-		elif self.protocol == socket.SOCK_DGRAM:					# UDP needs some extra work
-			pass
+    def _start_scanner(self):
+        while True:
+            time.sleep(self.timeout_sleep)
+            try:
+                next_port = self.next_port()                        # Next port to scan
 
-	def _start_scanner(self):
-		while True:
-			time.sleep(self.timeout_sleep)
-			try:
-				next_port = self.next_port()						# Next port to scan
+                if self.is_port_open(next_port):
+                    self.add_scan_result(
+                        PortScanner.ScanResult(
+                            next_port,
+                            'Port is up',
+                            PortScanner.ScanResult.OPEN
+                        )
+                    )
+            except StopIteration:                                    # All ports scanned
+                break
+            except Exception as err:
+                messages = {
+                    ConnectionRefusedError: 'Port seems closed',
+                    TimeoutError: 'Connection timed out',
+                    OSError: f'OS threw an error while scanning this port, error message:\n\t"{err}"',
+                }
+                self.add_scan_result(
+                    PortScanner.ScanResult(
+                        next_port,
+                        messages.get(type(err)) or err,
+                        PortScanner.ScanResult.CLOSED
+                    )
+                )
 
-				if self.is_port_open(next_port):
-					self.add_scan_result(
-						PortScanner.ScanResult(
-							next_port,
-							'Port is up',
-							PortScanner.ScanResult.OPEN
-						)
-					)
-			except StopIteration:									# All ports scanned
-				break
-			except Exception as err:
-				messages = {
-					ConnectionRefusedError: 'Port seems closed',
-					TimeoutError: 'Connection timed out',
-					OSError: f'OS threw an error while scanning this port, error message:\n\t"{err}"',
-				}
-				self.add_scan_result(
-					PortScanner.ScanResult(
-						next_port,
-						messages.get(type(err)) or err,
-						PortScanner.ScanResult.CLOSED
-					)
-				)
+    def next_port(self):
+        return next(self.port_range)
 
-	def next_port(self):
-		return next(self.port_range)
+    def is_done(self):
+        with self.scan_results_lock:
+            if self.scan_results:
+                return False
+        for thread in self.threads:
+            if thread.is_alive():
+                return False
+        return True
 
-	def is_done(self):
-		with self.scan_results_lock:
-			if self.scan_results:
-				return False
-		for thread in self.threads:
-			if thread.is_alive():
-				return False
-		return True
+    def start_scanner(self):
+        for _ in range(self.thread_count):                            # Start n threads for faster processing
+            thread = threading.Thread(
+                target=self._start_scanner,
+                daemon=True
+            )
+            thread.start()
+            self.threads.append(thread)
 
-	def start_scanner(self):
-		for _ in range(self.thread_count):							# Start n threads for faster processing
-			thread = threading.Thread(
-				target=self._start_scanner,
-				daemon=True
-			)
-			thread.start()
-			self.threads.append(thread)
-
-	def add_scan_result(self, result):
-		with self.scan_results_lock:
-			self.scan_results.append(result)
+    def add_scan_result(self, result):
+        with self.scan_results_lock:
+            self.scan_results.append(result)
 
 
 @click.command()
@@ -131,33 +130,33 @@ class PortScanner:
 @click.option('-p', '--port-range', help='Port range(\'-\' separated)/list(\',\' separated)', type=PortRange(), required=True)
 @click.option('-sV', '--service-scan', help='List services running on ports', type=bool, default=False)
 def scan(ip, tcp, udp, port_range, thread_count, timeout, open, service_scan):
-	if tcp and udp:
-		click.echo('Please specify a single protocol!')
-		exit(0)
+    if tcp and udp:
+        click.echo('Please specify a single protocol!')
+        exit(0)
 
-	protocol = socket.SOCK_STREAM if tcp else socket.SOCK_DGRAM
-	open_only = open
-	scanner = PortScanner(
-		ip,
-		port_range,
-		protocol,
-		thread_count=thread_count,
-		timeout_sleep=timeout,
-		service_scan=service_scan
-	)
-	scanner.start_scanner()
-	result_itr = iter(scanner)
-	while True:
-		try:
-			next_result = next(result_itr)
-			if open_only:
-				if next_result.is_open():
-					print(next_result)
-			else:
-				print(next_result)
-		except StopIteration:
-			break
+    protocol = socket.SOCK_STREAM if tcp else socket.SOCK_DGRAM
+    open_only = open
+    scanner = PortScanner(
+        ip,
+        port_range,
+        protocol,
+        thread_count=thread_count,
+        timeout_sleep=timeout,
+        service_scan=service_scan
+    )
+    scanner.start_scanner()
+    result_itr = iter(scanner)
+    while True:
+        try:
+            next_result = next(result_itr)
+            if open_only:
+                if next_result.is_open():
+                    print(next_result)
+            else:
+                print(next_result)
+        except StopIteration:
+            break
 
 
 if __name__ == '__main__':
-	scan()
+    scan()
