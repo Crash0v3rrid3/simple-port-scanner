@@ -58,7 +58,7 @@ class PortScanner:
 					self.add_scan_result(
 						PortScanner.ScanResult(
 							next_port,
-							'Port is up!',
+							'Port is up',
 							PortScanner.ScanResult.OPEN
 						)
 					)
@@ -66,14 +66,14 @@ class PortScanner:
 					messages = {
 						ConnectionRefusedError: 'Port seems closed',
 						TimeoutError: 'Connection timed out',
-						OSError: f'OS threw an error while scanning this port, threw this err\n\t"{err}"',
+						OSError: f'OS threw an error while scanning this port, error message:\n\t"{err}"',
 					}
 
 					s.close()
 					self.add_scan_result(
 						PortScanner.ScanResult(
 							next_port,
-							messages.get(err) or 'Port seems closed',
+							messages.get(type(err)) or err,
 							PortScanner.ScanResult.CLOSED
 						)
 					)
