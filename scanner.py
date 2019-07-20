@@ -25,7 +25,7 @@ class PortScanner:
 			return self.status == PortScanner.ScanResult.OPEN
 
 		def __str__(self):
-			return f'{self.port}\t\t{self.status}\t\t{self.message}'
+			return '%8s%10s\t%s' % (self.port, self.status, self.message)
 
 	def __init__(self, ip, port_range, protocol, thread_count=1, timeout_sleep=0.5):
 		self.scan_results = []
@@ -54,21 +54,28 @@ class PortScanner:
 				if self.scan_results:
 					return self.scan_results.pop(0)
 
+	def is_port_open(self, port):
+		s = socket.socket(socket.AF_INET, self.protocol)  	# Create new socket
+
+		if self.protocol == socket.SOCK_STREAM:				# TCP is simple
+			s.connect((self.ip, port))  					# connect to host on specified port
+		elif self.protocol == socket.SOCK_DGRAM:			# UDP needs some extra work
+			pass
+
 	def _start_scanner(self):
 		while True:
 			time.sleep(self.timeout_sleep)
 			try:
 				next_port = self.next_port()						# Next port to scan
 
-				s = socket.socket(socket.AF_INET, self.protocol)  	# Create new socket
-				s.connect((self.ip, next_port))  					# connect to host on specified port
-				self.add_scan_result(
-					PortScanner.ScanResult(
-						next_port,
-						'Port is up',
-						PortScanner.ScanResult.OPEN
+				if self.is_port_open(next_port):
+					self.add_scan_result(
+						PortScanner.ScanResult(
+							next_port,
+							'Port is up',
+							PortScanner.ScanResult.OPEN
+						)
 					)
-				)
 			except StopIteration:									# All ports scanned
 				break
 			except Exception as err:
@@ -115,8 +122,8 @@ class PortScanner:
 
 @click.command()
 @click.argument('ip', type=IpOrHostName(), required=True)
-@click.option('-t', '--tcp', help='Toggle TCP Scan', type=bool, default=True, is_flag=True)
-@click.option('-u', '--udp', help='Toggle UDP Scan', type=bool, default=False, is_flag=True)
+@click.option('-t', '--tcp', help='Toggle TCP Scan', type=bool, default=True)
+@click.option('-u', '--udp', help='Toggle UDP Scan', type=bool, default=False)
 @click.option('-T', '--thread-count', help='Number of threads', type=int, default=1)
 @click.option('-s', '--timeout', help='Amount of time to sleep between successive port scans', type=float, default=0.5)
 @click.option('-o', '--open', help='Print only open ports', type=bool, default=False, is_flag=True)
