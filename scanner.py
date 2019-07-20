@@ -55,20 +55,21 @@ class PortScanner:
                     return self.scan_results.pop(0)
 
     def is_port_open(self, port):
-        s = socket.socket(socket.AF_INET, self.protocol)              # Create new socket
+        s = socket.socket(socket.AF_INET, self.protocol)                # Create new socket
 
-        if self.protocol == socket.SOCK_STREAM:                        # TCP is simple
-            s.connect((self.ip, port))                              # connect to host on specified port
+        s.connect((self.ip, port))                                      # connect to host on specified port
+        if self.protocol == socket.SOCK_STREAM:                         # TCP is simple
             s.close()
             return True
-        elif self.protocol == socket.SOCK_DGRAM:                    # UDP needs some extra work
-            pass
+        elif self.protocol == socket.SOCK_DGRAM:                        # UDP needs some extra work
+            s.send(b'')
+            data = s.recv(256)
 
     def _start_scanner(self):
         while True:
             time.sleep(self.timeout_sleep)
             try:
-                next_port = self.next_port()                        # Next port to scan
+                next_port = self.next_port()                            # Next port to scan
 
                 if self.is_port_open(next_port):
                     self.add_scan_result(
@@ -122,20 +123,14 @@ class PortScanner:
 
 @click.command()
 @click.argument('ip', type=IpOrHostName(), required=True)
-@click.option('-t', '--tcp', help='Toggle TCP Scan', type=bool, default=True)
-@click.option('-u', '--udp', help='Toggle UDP Scan', type=bool, default=False)
+@click.option('-t/-u', '--tcp/--udp', help='Toggle TCP Scan or UDP Scan', default=True)
 @click.option('-T', '--thread-count', help='Number of threads', type=int, default=1)
 @click.option('-s', '--timeout', help='Amount of time to sleep between successive port scans', type=float, default=0.5)
-@click.option('-o', '--open', help='Print only open ports', type=bool, default=False, is_flag=True)
+@click.option('-o', '--open', 'open_only', help='Print only open ports', type=bool, default=False, is_flag=True)
 @click.option('-p', '--port-range', help='Port range(\'-\' separated)/list(\',\' separated)', type=PortRange(), required=True)
 @click.option('-sV', '--service-scan', help='List services running on ports', type=bool, default=False)
-def scan(ip, tcp, udp, port_range, thread_count, timeout, open, service_scan):
-    if tcp and udp:
-        click.echo('Please specify a single protocol!')
-        exit(0)
-
+def scan(ip, tcp, port_range, thread_count, timeout, open_only, service_scan):
     protocol = socket.SOCK_STREAM if tcp else socket.SOCK_DGRAM
-    open_only = open
     scanner = PortScanner(
         ip,
         port_range,
@@ -144,6 +139,7 @@ def scan(ip, tcp, udp, port_range, thread_count, timeout, open, service_scan):
         timeout_sleep=timeout,
         service_scan=service_scan
     )
+    start_time = time.time()
     scanner.start_scanner()
     result_itr = iter(scanner)
     while True:
@@ -156,6 +152,10 @@ def scan(ip, tcp, udp, port_range, thread_count, timeout, open, service_scan):
                 print(next_result)
         except StopIteration:
             break
+
+    end_time = time.time()
+
+    print('\nScan completed in %.3fs' % (end_time - start_time))
 
 
 if __name__ == '__main__':
