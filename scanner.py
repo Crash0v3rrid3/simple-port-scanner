@@ -4,9 +4,14 @@ import threading
 import time
 from type_utilities import *
 
-# Scanner class
+
 class PortScanner:
+	"""Scanner class"""
+
 	class ScanResult:
+		"""Scan Result class"""
+
+		# Result Possibilities
 		OPEN = 'open'
 		FILTERED = 'filtered'
 		CLOSED = 'closed'
@@ -16,8 +21,11 @@ class PortScanner:
 			self.message = message
 			self.status = status
 
+		def is_open(self):
+			return self.status == PortScanner.ScanResult.OPEN
+
 		def __str__(self):
-			return f'{self.port}\t{self.status}\t{self.message}'
+			return f'{self.port}\t\t{self.status}\t\t{self.message}'
 
 	def __init__(self, ip, port_range, protocol, thread_count=1, timeout_sleep=0.5):
 		self.scan_results = []
@@ -53,32 +61,31 @@ class PortScanner:
 				next_port = self.next_port()						# Next port to scan
 
 				s = socket.socket(socket.AF_INET, self.protocol)  	# Create new socket
-				try:
-					s.connect((self.ip, next_port))  				# connect to host on specified port
-					self.add_scan_result(
-						PortScanner.ScanResult(
-							next_port,
-							'Port is up',
-							PortScanner.ScanResult.OPEN
-						)
+				s.connect((self.ip, next_port))  					# connect to host on specified port
+				self.add_scan_result(
+					PortScanner.ScanResult(
+						next_port,
+						'Port is up',
+						PortScanner.ScanResult.OPEN
 					)
-				except Exception as err:
-					messages = {
-						ConnectionRefusedError: 'Port seems closed',
-						TimeoutError: 'Connection timed out',
-						OSError: f'OS threw an error while scanning this port, error message:\n\t"{err}"',
-					}
-
-					s.close()
-					self.add_scan_result(
-						PortScanner.ScanResult(
-							next_port,
-							messages.get(type(err)) or err,
-							PortScanner.ScanResult.CLOSED
-						)
-					)
-			except StopIteration as err:							# All ports scanned
+				)
+			except StopIteration:									# All ports scanned
 				break
+			except Exception as err:
+				messages = {
+					ConnectionRefusedError: 'Port seems closed',
+					TimeoutError: 'Connection timed out',
+					OSError: f'OS threw an error while scanning this port, error message:\n\t"{err}"',
+				}
+
+				s.close()
+				self.add_scan_result(
+					PortScanner.ScanResult(
+						next_port,
+						messages.get(type(err)) or err,
+						PortScanner.ScanResult.CLOSED
+					)
+				)
 
 	def next_port(self):
 		return next(self.port_range)
@@ -107,18 +114,20 @@ class PortScanner:
 
 
 @click.command()
-@click.argument('ip', type=IpOrHostName())
-@click.option('-t', '--tcp', type=bool, default=True)
-@click.option('-u', '--udp', type=bool, default=False)
-@click.option('-T', '--thread-count', type=int, default=1)
-@click.option('-s', '--timeout', type=float, default=0.5)
-@click.argument('port_range', type=PortRange())
-def scan(ip, tcp, udp, port_range, thread_count, timeout):
+@click.argument('ip', type=IpOrHostName(), required=True)
+@click.option('-t', '--tcp', help='Toggle TCP Scan', type=bool, default=True, is_flag=True)
+@click.option('-u', '--udp', help='Toggle UDP Scan', type=bool, default=False, is_flag=True)
+@click.option('-T', '--thread-count', help='Number of threads', type=int, default=1)
+@click.option('-s', '--timeout', help='Amount of time to sleep between successive port scans', type=float, default=0.5)
+@click.option('-o', '--open', help='Print only open ports', type=bool, default=False, is_flag=True)
+@click.option('-p', '--port-range', help='Port range(\'-\' separated)/list(\',\' separated)', type=PortRange(), required=True)
+def scan(ip, tcp, udp, port_range, thread_count, timeout, open):
 	if tcp and udp:
 		click.echo('Please specify a single protocol!')
 		exit(0)
 
 	protocol = socket.SOCK_STREAM if tcp else socket.SOCK_DGRAM
+	open_only = open
 	scanner = PortScanner(
 		ip,
 		port_range,
@@ -131,7 +140,11 @@ def scan(ip, tcp, udp, port_range, thread_count, timeout):
 	while True:
 		try:
 			next_result = next(result_itr)
-			print(next_result)
+			if open_only:
+				if next_result.is_open():
+					print(next_result)
+			else:
+				print(next_result)
 		except StopIteration:
 			break
 
