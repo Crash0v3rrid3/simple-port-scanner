@@ -63,9 +63,9 @@ class PortRange(click.ParamType):
 # Scanner class
 class PortScanner:
 	class ScanResult:
-		OPEN = 0
-		FILTERED = 1
-		CLOSED = 2
+		OPEN = 'open'
+		FILTERED = 'filtered'
+		CLOSED = 'closed'
 
 		def __init__(self, port, message, status):
 			self.port = port
@@ -118,12 +118,18 @@ class PortScanner:
 							PortScanner.ScanResult.OPEN
 						)
 					)
-				except ConnectionRefusedError:
+				except Exception as err:
+					messages = {
+						ConnectionRefusedError: 'Port seems closed',
+						TimeoutError: 'Connection timed out',
+						OSError: f'OS threw an error while scanning this port, threw this err\n\t"{err}"',
+					}
+
 					s.close()
 					self.add_scan_result(
 						PortScanner.ScanResult(
 							next_port,
-							'Port seems closed!',
+							messages.get(err) or 'Port seems closed',
 							PortScanner.ScanResult.CLOSED
 						)
 					)
