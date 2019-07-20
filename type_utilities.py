@@ -4,6 +4,7 @@ import socket
 
 
 class IpOrHostName(click.ParamType):
+    name = 'IP or Hostname'
 
     def convert(self, value, param, ctx):
         """Converts hostnames/domain names into IP's"""
@@ -24,6 +25,7 @@ class IpOrHostName(click.ParamType):
 
 
 class PortRange(click.ParamType):
+    name = 'port range,list'
 
     def convert(self, value, param, ctx):
         """Converts various port lists, ranges into list"""
