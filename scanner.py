@@ -27,15 +27,16 @@ class PortScanner:
 		def __str__(self):
 			return '%8s%10s\t%s' % (self.port, self.status, self.message)
 
-	def __init__(self, ip, port_range, protocol, thread_count=1, timeout_sleep=0.5):
+	def __init__(self, ip, port_range, protocol, service_scan=False, thread_count=1, timeout_sleep=0.5):
 		self.scan_results = []
+		self.threads = []
 
 		self.thread_count = thread_count
 		self.port_range = port_range
 		self.timeout_sleep = timeout_sleep
 		self.ip = ip
 		self.protocol = protocol
-		self.threads = []
+		self.service_scan = service_scan
 
 		self.scan_results_lock = threading.Lock()
 		self.port_range_lock = threading.Lock()
@@ -55,11 +56,13 @@ class PortScanner:
 					return self.scan_results.pop(0)
 
 	def is_port_open(self, port):
-		s = socket.socket(socket.AF_INET, self.protocol)  	# Create new socket
+		s = socket.socket(socket.AF_INET, self.protocol)  			# Create new socket
 
-		if self.protocol == socket.SOCK_STREAM:				# TCP is simple
-			s.connect((self.ip, port))  					# connect to host on specified port
-		elif self.protocol == socket.SOCK_DGRAM:			# UDP needs some extra work
+		if self.protocol == socket.SOCK_STREAM:						# TCP is simple
+			s.connect((self.ip, port))  							# connect to host on specified port
+			s.close()
+			return True
+		elif self.protocol == socket.SOCK_DGRAM:					# UDP needs some extra work
 			pass
 
 	def _start_scanner(self):
@@ -84,8 +87,6 @@ class PortScanner:
 					TimeoutError: 'Connection timed out',
 					OSError: f'OS threw an error while scanning this port, error message:\n\t"{err}"',
 				}
-
-				s.close()
 				self.add_scan_result(
 					PortScanner.ScanResult(
 						next_port,
@@ -128,7 +129,8 @@ class PortScanner:
 @click.option('-s', '--timeout', help='Amount of time to sleep between successive port scans', type=float, default=0.5)
 @click.option('-o', '--open', help='Print only open ports', type=bool, default=False, is_flag=True)
 @click.option('-p', '--port-range', help='Port range(\'-\' separated)/list(\',\' separated)', type=PortRange(), required=True)
-def scan(ip, tcp, udp, port_range, thread_count, timeout, open):
+@click.option('-sV', '--service-scan', help='List services running on ports', type=bool, default=False)
+def scan(ip, tcp, udp, port_range, thread_count, timeout, open, service_scan):
 	if tcp and udp:
 		click.echo('Please specify a single protocol!')
 		exit(0)
@@ -140,7 +142,8 @@ def scan(ip, tcp, udp, port_range, thread_count, timeout, open):
 		port_range,
 		protocol,
 		thread_count=thread_count,
-		timeout_sleep=timeout
+		timeout_sleep=timeout,
+		service_scan=service_scan
 	)
 	scanner.start_scanner()
 	result_itr = iter(scanner)
