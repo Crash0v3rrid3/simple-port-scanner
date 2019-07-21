@@ -1,6 +1,7 @@
 import threading
 import socket
 import time
+import select
 
 
 class PortScanner:
@@ -73,8 +74,8 @@ class PortScanner:
             s.close()
             return True
         elif self.protocol == socket.SOCK_DGRAM:                        # UDP needs some extra work
-            s.send(b'')
-            data = s.recv(256)
+            # Port based request must be made
+            pass
 
     def _start_scanner(self):
         while True:
