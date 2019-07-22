@@ -1,7 +1,7 @@
 import click
 import time
-from type_utilities import *
-from scanner_class import *
+from type_utilities import IpOrHostName, PortRange
+from scanner_class import PortScanner
 
 
 @click.command()

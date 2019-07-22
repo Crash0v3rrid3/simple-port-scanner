@@ -2,43 +2,61 @@ import threading
 import socket
 import time
 import select
+import util
+
+class ScanResult:
+    """Scan Result class"""
+
+    # Result Possibilities
+    OPEN = 'open'
+    FILTERED = 'filtered'
+    CLOSED = 'closed'
+
+    def __init__(self, port, message, status):
+        if type(port) != int:
+            raise TypeError('Invalid port specified')
+        if port <= 0 or port > 65535:
+            raise ValueError('Invalid Port Specified')
+        if status != ScanResult.OPEN or status != ScanResult.FILTERED or status != ScanResult.CLOSED:
+            raise ValueError('Invalid port state')
+        self.port = port
+        self.message = message
+        self.status = status
+
+    def is_open(self):
+        return self.status == ScanResult.OPEN
+
+    def is_closed(self):
+        return self.status == ScanResult.CLOSED
+
+    def get_port(self):
+        return self.port
+
+    def get_status(self):
+        return self.status
+
+    def get_message(self):
+        return self.message
+
+    def __str__(self):
+        return '%8s%10s\t%s' % (self.port, self.status, self.message)
 
 
 class PortScanner:
     """Scanner class"""
 
-    class ScanResult:
-        """Scan Result class"""
-
-        # Result Possibilities
-        OPEN = 'open'
-        FILTERED = 'filtered'
-        CLOSED = 'closed'
-
-        def __init__(self, port, message, status):
-            self.port = port
-            self.message = message
-            self.status = status
-
-        def is_open(self):
-            return self.status == PortScanner.ScanResult.OPEN
-
-        def is_closed(self):
-            return self.status == PortScanner.ScanResult.CLOSED
-
-        def get_port(self):
-            return self.port
-
-        def get_status(self):
-            return self.status
-
-        def get_message(self):
-            return self.message
-
-        def __str__(self):
-            return '%8s%10s\t%s' % (self.port, self.status, self.message)
-
     def __init__(self, ip, port_range, protocol, open_only=False, service_scan=False, thread_count=1, timeout_sleep=0.5):
+        if re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", ip) is not None:
+            raise TypeError("Invalid IP address given")
+        if protocol != socket.SOCK_STREAM or protocol != socket.SOCK_DGRAM:
+            raise ValueError("Invalid protocol specified, please specify socket.SOCK_DGRAM or socket.SOCK_STREAM")
+        if type(False) != type(open_only):
+            raise TypeError
+        if type(1) != type(thread_count):
+            raise TypeError("Invalid thread count")
+        if type(0.5) != type(timeout_sleep):
+            raise TypeError("Invalid timeout value")
+
         self.scan_results = []
         self.threads = []
 
@@ -82,17 +100,22 @@ class PortScanner:
             time.sleep(self.timeout_sleep)
             try:
                 next_port = self.next_port()                            # Next port to scan
+                util.is_port_valid(next_port)
 
                 if self.is_port_open(next_port):
                     self.add_scan_result(
-                        PortScanner.ScanResult(
+                        ScanResult(
                             next_port,
                             'Port is up',
-                            PortScanner.ScanResult.OPEN
+                            ScanResult.OPEN
                         )
                     )
             except StopIteration:                                       # All ports scanned
                 break
+            except TypeError as err:                                    # Invalid port
+                pass
+            except ValueError as err:                                   # Invalid port
+                pass
             except Exception as err:
                 messages = {
                     ConnectionRefusedError: 'Port seems closed',
@@ -101,10 +124,10 @@ class PortScanner:
                 }
                 if not self.open_only:
                     self.add_scan_result(
-                        PortScanner.ScanResult(
+                        ScanResult(
                             next_port,
                             messages.get(type(err)) or err,
-                            PortScanner.ScanResult.CLOSED
+                            ScanResult.CLOSED
                         )
                     )
 

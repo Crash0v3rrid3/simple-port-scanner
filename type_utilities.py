@@ -30,7 +30,6 @@ class PortRange(click.ParamType):
     def convert(self, value, param, ctx):
         """Converts various port lists, ranges into list"""
 
-        values = []
         if ',' in value: 										# custom list given
             values = value.split(',')
         else:
