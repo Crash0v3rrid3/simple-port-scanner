@@ -55,4 +55,4 @@ class PortRange(click.ParamType):
             else:												# Single port
                 final_port_range.add(int(ports))
 
-        return iter(tuple(final_port_range))
+        return tuple(final_port_range)

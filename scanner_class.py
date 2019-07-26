@@ -3,6 +3,7 @@ import socket
 import time
 import select
 import util
+import re
 
 class ScanResult:
     """Scan Result class"""
@@ -17,7 +18,7 @@ class ScanResult:
             raise TypeError('Invalid port specified')
         if port <= 0 or port > 65535:
             raise ValueError('Invalid Port Specified')
-        if status != ScanResult.OPEN or status != ScanResult.FILTERED or status != ScanResult.CLOSED:
+        if status != ScanResult.OPEN and status != ScanResult.FILTERED and status != ScanResult.CLOSED:
             raise ValueError('Invalid port state')
         self.port = port
         self.message = message
@@ -46,10 +47,6 @@ class PortScanner:
     """Scanner class"""
 
     def __init__(self, ip, port_range, protocol, open_only=False, service_scan=False, thread_count=1, timeout_sleep=0.5):
-        if re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", ip) is not None:
-            raise TypeError("Invalid IP address given")
-        if protocol != socket.SOCK_STREAM or protocol != socket.SOCK_DGRAM:
-            raise ValueError("Invalid protocol specified, please specify socket.SOCK_DGRAM or socket.SOCK_STREAM")
         if type(False) != type(open_only):
             raise TypeError
         if type(1) != type(thread_count):
@@ -85,6 +82,7 @@ class PortScanner:
                     return self.scan_results.pop(0)
 
     def is_port_open(self, port):
+        util.is_port_valid(port)                                        # Check port validity
         s = socket.socket(socket.AF_INET, self.protocol)                # Create new socket
 
         s.connect((self.ip, port))                                      # connect to host on specified port
@@ -100,7 +98,6 @@ class PortScanner:
             time.sleep(self.timeout_sleep)
             try:
                 next_port = self.next_port()                            # Next port to scan
-                util.is_port_valid(next_port)
 
                 if self.is_port_open(next_port):
                     self.add_scan_result(
