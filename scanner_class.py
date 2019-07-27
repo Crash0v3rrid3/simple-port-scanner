@@ -1,9 +1,9 @@
 import threading
 import socket
 import time
-import select
 import util
-import re
+from queue import Empty
+
 
 class ScanResult:
     """Scan Result class"""
@@ -98,7 +98,6 @@ class PortScanner:
             time.sleep(self.timeout_sleep)
             try:
                 next_port = self.next_port()                            # Next port to scan
-
                 if self.is_port_open(next_port):
                     self.add_scan_result(
                         ScanResult(
@@ -107,7 +106,9 @@ class PortScanner:
                             ScanResult.OPEN
                         )
                     )
-            except StopIteration:                                       # All ports scanned
+            except StopIteration:                                       # All ports scanned when using an iter
+                break
+            except Empty:                                               # All ports scanned when using a queue
                 break
             except TypeError as err:                                    # Invalid port
                 pass
@@ -129,6 +130,9 @@ class PortScanner:
                     )
 
     def next_port(self):
+        # port = self.port_range.get(block=False)
+        # print(port)
+        # return port
         return next(self.port_range)
 
     def is_done(self):

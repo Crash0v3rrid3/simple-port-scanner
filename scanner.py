@@ -4,9 +4,11 @@ from type_utilities import IpOrHostName, PortRange
 from scanner_class import PortScanner
 import socket
 import multiprocessing
+import os
 
 
-def port_scan(ip, protocol, port_range, thread_count, timeout, open_only, service_scan):
+def port_scan(args):
+    ip, protocol, port_range, thread_count, timeout, open_only, service_scan = args
     scanner = PortScanner(
         ip,
         port_range,
@@ -36,26 +38,23 @@ def port_scan(ip, protocol, port_range, thread_count, timeout, open_only, servic
 @click.option('-p', '--port-range', help='Port range(\'-\' separated)/list(\',\' separated), 1,2,3 or 1-10 or 1-30,65,87', type=PortRange(), required=True)
 @click.option('-sV', '--service-scan', help='List services running on ports', type=bool, default=False)
 def scan(ip, tcp, process_count, port_range, thread_count, timeout, open_only, service_scan):
-    protocol = socket.SOCK_STREAM if tcp else socket.SOCK_DGRAM
-    processes = []
-    total_number_of_ports = len(port_range)
-    split_count = total_number_of_ports // process_count
+    protocol = socket.SOCK_STREAM if tcp else socket.SOCK_DGRAM                     # Decide protocol
+    split_count = len(port_range) // process_count
+    # port_queue = multiprocessing.Queue()                                            # To share ports
 
-    for _ in range(process_count):
-        process = multiprocessing.Process(
-            target=port_scan,
-            args=(ip, protocol, iter(port_range[: split_count]), thread_count, timeout, open_only, service_scan)
-        )
-        if port_range[: split_count]:
-            process.start()
-            port_range = port_range[split_count: ]
-            processes.append(process)
-        else:
-            break
+    # for port in port_range:                                                         # Add ports to queue
+    #     port_queue.put(port)
+
+    process_pool = multiprocessing.Pool(process_count)
+    ports = [port_range[index: split_count] for index in range(0, len(port_range), split_count)]
 
     start_time = time.time()
-    for process in processes:
-        process.join()
+    process_pool.map(
+        port_scan,
+        [
+            [ip, protocol, iter(x), thread_count, timeout, open_only, service_scan] for x in ports
+        ]
+    )
     end_time = time.time()
 
     print('\nScan completed in %.3fs' % (end_time - start_time))
