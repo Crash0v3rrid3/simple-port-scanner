@@ -4,11 +4,10 @@ from type_utilities import IpOrHostName, PortRange
 from scanner_class import PortScanner
 import socket
 import multiprocessing
-import os
 
 
 def port_scan(args):
-    ip, protocol, port_range, thread_count, timeout, open_only, service_scan = args
+    ip, protocol, port_range, thread_count, timeout, open_only, service_scan, dynamic_load_sharing = args
     scanner = PortScanner(
         ip,
         port_range,
@@ -16,7 +15,8 @@ def port_scan(args):
         open_only=open_only,
         thread_count=thread_count,
         timeout_sleep=timeout,
-        service_scan=service_scan
+        service_scan=service_scan,
+        dynamic_load_sharing=dynamic_load_sharing
     )
     scanner.start_scanner()
     result_itr = iter(scanner)
@@ -37,22 +37,31 @@ def port_scan(args):
 @click.option('-o', '--open', 'open_only', help='Print only open ports', default=False, is_flag=True)
 @click.option('-p', '--port-range', help='Port range(\'-\' separated)/list(\',\' separated), 1,2,3 or 1-10 or 1-30,65,87', type=PortRange(), required=True)
 @click.option('-sV', '--service-scan', help='List services running on ports', type=bool, default=False)
-def scan(ip, tcp, process_count, port_range, thread_count, timeout, open_only, service_scan):
+@click.option('-d', '--dynamic-load-sharing', help='Uses a multiprocessing Queue to share ports among processes', default=False, is_flag=True)
+def scan(ip, tcp, process_count, port_range, thread_count, timeout, open_only, service_scan, dynamic_load_sharing):
     protocol = socket.SOCK_STREAM if tcp else socket.SOCK_DGRAM                     # Decide protocol
-    split_count = len(port_range) // process_count
-    # port_queue = multiprocessing.Queue()                                            # To share ports
 
-    # for port in port_range:                                                         # Add ports to queue
-    #     port_queue.put(port)
+    if dynamic_load_sharing:
+        manager = multiprocessing.Manager()
+        _port_queue = manager.Queue()                                            # To share ports
+
+        for port in port_range:                                                         # Add ports to queue
+            _port_queue.put(port)
+
+        port_queue = [_port_queue] * process_count
+    else:
+        split_count = len(port_range) // process_count
+        port_queue = [iter(port_range[index: split_count]) for index in range(0, len(port_range), split_count)]
 
     process_pool = multiprocessing.Pool(process_count)
-    ports = [port_range[index: split_count] for index in range(0, len(port_range), split_count)]
 
     start_time = time.time()
+
     process_pool.map(
         port_scan,
         [
-            [ip, protocol, iter(x), thread_count, timeout, open_only, service_scan] for x in ports
+            [ip, protocol, x, thread_count, timeout, open_only, service_scan, dynamic_load_sharing]
+            for x in port_queue
         ]
     )
     end_time = time.time()
